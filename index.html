@@ -1,0 +1,184 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Simulador Farmina</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      max-width: 800px;
+      margin: auto;
+    }
+    h1 {
+      color: #2b4c7e;
+    }
+    label {
+      display: block;
+      margin-top: 15px;
+    }
+    select, button {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+    }
+    .product {
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      padding: 15px;
+      margin-top: 15px;
+    }
+    .product img {
+      max-width: 150px;
+    }
+    .country-info {
+      font-size: 14px;
+      color: #777;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Simulador de Produtos Farmina</h1>
+  <p class="country-info">País (countryId): <strong>MA</strong></p>
+
+  <form id="filterForm">
+    <label>Tipo de alimento:
+      <select name="productType">
+        <option value="dry">Seco</option>
+        <option value="wet">Molhado</option>
+      </select>
+    </label>
+
+    <label>Tipo de pet:
+      <select name="type" id="type">
+        <option value="dog">Cão</option>
+        <option value="cat">Gato</option>
+      </select>
+    </label>
+
+    <label>Gestação:
+      <select name="gestation">
+        <option value="false">Não</option>
+        <option value="true">Sim</option>
+      </select>
+    </label>
+
+    <label>Lactação:
+      <select name="lactation">
+        <option value="false">Não</option>
+        <option value="true">Sim</option>
+      </select>
+    </label>
+
+    <label>Fase da vida:
+      <select name="lifeStage">
+        <option value="">Qualquer</option>
+        <option value="puppy">Filhote</option>
+        <option value="adult">Adulto</option>
+        <option value="senior">Sênior</option>
+      </select>
+    </label>
+
+    <label>Cuidados especiais:
+      <select name="specialcare" id="specialcareSelect">
+        <option value="">Nenhum</option>
+      </select>
+    </label>
+
+    <button type="submit">Buscar Produtos</button>
+  </form>
+
+  <div id="results"></div>
+
+  <script>
+    const specialcareSelect = document.getElementById('specialcareSelect');
+    const petTypeSelect = document.getElementById('type');
+
+    async function fetchSpecialCares() {
+      const type = petTypeSelect.value;
+      const res = await fetch('http://localhost:5000/specialcares', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + btoa('wsfarmina_zendesk:test'),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          species: type,
+          country: 'MA',
+          languageId: 1,
+          type: 'dietetic'
+        })
+      });
+
+      const data = await res.json();
+      specialcareSelect.innerHTML = '<option value="">Nenhum</option>';
+
+      if (data.result[0] && data.result[0].specialcares && data.result[0].specialcares.list) {
+        data.result[0].specialcares.list.forEach(item => {
+          const opt = document.createElement('option');
+          opt.value = item.specialcare_id;
+          opt.textContent = item.specialcare_name;
+          specialcareSelect.appendChild(opt);
+        });
+      }
+    }
+
+    petTypeSelect.addEventListener('change', fetchSpecialCares);
+    window.addEventListener('load', fetchSpecialCares);
+
+    document.getElementById('filterForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const form = e.target;
+      const payload = {
+        country: 'MA',
+        languageId: 20,
+        appsAndEshop: true,
+        productType: form.productType.value,
+        type: form.type.value,
+        gestation: form.gestation.value === 'true',
+        lactation: form.lactation.value === 'true'
+      };
+
+      if (form.lifeStage.value) {
+        payload.lifeStage = form.lifeStage.value;
+      }
+
+      if (form.specialcare.value) {
+        payload.specialcares = [form.specialcare.value];
+      }
+
+      const res = await fetch('http://localhost:5000/produtos', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + btoa('wsfarmina_zendesk:test'),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = '';
+
+      if (data.result && data.result.products) {
+        Object.values(data.result.products).forEach(prod => {
+          resultsDiv.innerHTML += `
+            <div class="product">
+              <h3>${prod.name}</h3>
+              <img src="${prod.img_thumbnail}" alt="${prod.name}" />
+              <p><strong>Descrição:</strong> ${prod.description?.substring(0, 200)}...</p>
+              <p><a href="${prod.url}" target="_blank">Ver produto</a></p>
+            </div>
+          `;
+        });
+      } else {
+        resultsDiv.innerHTML = '<p>Nenhum produto encontrado.</p>';
+      }
+    });
+  </script>
+</body>
+</html>
